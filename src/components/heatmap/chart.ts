@@ -11,6 +11,8 @@ export function heatmapChart(
 ) {
   var bufferCanvas = createBuffer(data.values, brightness)
   var zoomTransform = d3.zoomIdentity
+  var lastCanvasWidth = 0
+  var lastCanvasHeight = 0
   var isBrushing = false
 
   heatmapChart.data = function(newData: HeatmapData) {
@@ -74,6 +76,22 @@ export function heatmapChart(
       .style("margin-right", margin.right + "px")
       .style("margin-bottom", margin.bottom + "px")
       .style("margin-left", margin.left + "px")
+
+    // Sync zoom transform
+    if (
+      zoomTransform != d3.zoomIdentity &&
+      (lastCanvasWidth != canvasWidth || lastCanvasHeight != canvasHeight)
+    ) {
+      zoomTransform = d3.zoomIdentity
+        .translate(
+          (zoomTransform.x * canvasWidth) / lastCanvasWidth,
+          (zoomTransform.y * canvasHeight) / lastCanvasHeight
+        )
+        .scale(zoomTransform.k)
+      d3.zoom().transform(axis, zoomTransform)
+    }
+    lastCanvasWidth = canvasWidth
+    lastCanvasHeight = canvasHeight
 
     const ctx = canvas.node().getContext("2d")
     ctx.imageSmoothingEnabled = false
@@ -155,6 +173,31 @@ export function heatmapChart(
       .style("display", isBrushing ? "" : "none")
       .call(brush)
 
+    const zoomBehavior = d3
+      .zoom()
+      .scaleExtent([1, 64])
+      .translateExtent([
+        [0, 0],
+        [canvasWidth, canvasHeight],
+      ])
+      .extent([
+        [0, 0],
+        [canvasWidth, canvasHeight],
+      ])
+      .on("zoom", () => zoomed(d3.event.transform))
+      .on("start", zoomStart)
+
+    function zoomStart() {
+      if (d3.event.sourceEvent? d3.event.sourceEvent.type == "mousedown" : false) {
+        hideTooltips()
+      }
+    }
+
+    function zoomed(transform) {
+      zoomTransform = transform
+      render()
+    }
+
     function brushStart() {
       hideTooltips()
     }
@@ -184,31 +227,6 @@ export function heatmapChart(
           endKey: endKey,
         })
       }
-    }
-
-    const zoomBehavior = d3
-      .zoom()
-      .scaleExtent([1, 64])
-      .translateExtent([
-        [0, 0],
-        [canvasWidth, canvasHeight],
-      ])
-      .extent([
-        [0, 0],
-        [canvasWidth, canvasHeight],
-      ])
-      .on("zoom", () => zoomed(d3.event.transform))
-      .on("start", zoomStart)
-
-    function zoomStart() {
-      if (d3.event.sourceEvent.type == "mousedown") {
-        hideTooltips()
-      }
-    }
-
-    function zoomed(transform) {
-      zoomTransform = transform
-      render()
     }
 
     function hoverBehavior(axis) {
