@@ -31,13 +31,21 @@ export const Heatmap: React.FunctionComponent<HeatmapProps> = props => {
   var chart
 
   useEffect(() => {
-    chart = heatmapChart(props.data, 1, props.onBrush)
+    chart = heatmapChart(props.onBrush)
+    chart.data(props.data)
   }, [props.data])
 
   useEffect(() => {
     if (divRef.current != null) {
-      window.onresize = () => chart(d3.select(divRef.current))
-      chart(d3.select(divRef.current))
+      const container = divRef.current
+      const render = () => {
+        const width = container.offsetWidth
+        const height = container.offsetHeight
+        chart.size(width, height)
+        chart(d3.select(container))
+      }
+      window.onresize = render
+      render()
     }
   }, [props])
 

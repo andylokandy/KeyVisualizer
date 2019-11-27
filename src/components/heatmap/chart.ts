@@ -4,16 +4,24 @@ import { HeatmapRange, HeatmapData, KeyAxisEntry } from "."
 import { createBuffer } from "./buffer"
 import { labelAxisGroup } from "./label-axis"
 
-export function heatmapChart(
-  data: HeatmapData,
-  brightness: number,
-  onBrush: (range: HeatmapRange) => void
-) {
-  var bufferCanvas = createBuffer(data.values, brightness)
+const margin = {
+  top: 25,
+  right: 25,
+  bottom: 60,
+  left: 100,
+}
+
+export function heatmapChart(onBrush: (range: HeatmapRange) => void) {
+  var data: HeatmapData
+  var brightness = 1
+  var bufferCanvas: HTMLCanvasElement
   var zoomTransform = d3.zoomIdentity
-  var lastCanvasWidth = 0
-  var lastCanvasHeight = 0
   var isBrushing = false
+  var width = 0
+  var height = 0
+  var canvasWidth = 0
+  var canvasHeight = 0
+  const MSAARatio = 4
 
   heatmapChart.data = function(newData: HeatmapData) {
     data = newData
@@ -25,23 +33,30 @@ export function heatmapChart(
     bufferCanvas = createBuffer(data.values, brightness)
   }
 
+  heatmapChart.size = function(newWidth, newHeight) {
+    const newCanvasWidth = newWidth - margin.left - margin.right
+    const newCanvasHeight = newHeight - margin.left - margin.right
+    // Sync transform on resize
+    if (canvasWidth != 0 && canvasHeight != 0) {
+      zoomTransform = d3.zoomIdentity
+        .translate(
+          (zoomTransform.x * newCanvasWidth) / canvasWidth,
+          (zoomTransform.y * newCanvasHeight) / canvasHeight
+        )
+        .scale(zoomTransform.k)
+    }
+    
+    width = newWidth
+    height = newHeight
+    canvasWidth = newCanvasWidth
+    canvasHeight = newCanvasHeight
+  }
+
   heatmapChart.startBrush = function() {
     isBrushing = true
   }
 
   function heatmapChart(container) {
-    const margin = {
-      top: 25,
-      right: 25,
-      bottom: 60,
-      left: 100,
-    }
-    const width = container.node().offsetWidth
-    const height = container.node().offsetHeight
-    const MSAARatio = 4
-    const canvasWidth = width - margin.left - margin.right
-    const canvasHeight = height - margin.top - margin.bottom
-
     let tooltips = container.selectAll("div").data([null])
 
     tooltips = tooltips
@@ -76,22 +91,6 @@ export function heatmapChart(
       .style("margin-right", margin.right + "px")
       .style("margin-bottom", margin.bottom + "px")
       .style("margin-left", margin.left + "px")
-
-    // Sync transform on resize
-    if (
-      zoomTransform != d3.zoomIdentity &&
-      (lastCanvasWidth != canvasWidth || lastCanvasHeight != canvasHeight)
-    ) {
-      zoomTransform = d3.zoomIdentity
-        .translate(
-          (zoomTransform.x * canvasWidth) / lastCanvasWidth,
-          (zoomTransform.y * canvasHeight) / lastCanvasHeight
-        )
-        .scale(zoomTransform.k)
-      d3.zoom().transform(axis, zoomTransform)
-    }
-    lastCanvasWidth = canvasWidth
-    lastCanvasHeight = canvasHeight
 
     const ctx = canvas.node().getContext("2d")
     ctx.imageSmoothingEnabled = false
@@ -152,6 +151,8 @@ export function heatmapChart(
       .classed("label-axis", true)
       .merge(labelAxisSvg)
       .attr("transform", "translate(20, " + margin.top + ")")
+
+    d3.zoom().transform(axis, zoomTransform)
 
     const zoomBehavior = d3
       .zoom()
