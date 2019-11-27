@@ -77,7 +77,7 @@ export function heatmapChart(
       .style("margin-bottom", margin.bottom + "px")
       .style("margin-left", margin.left + "px")
 
-    // Sync zoom transform
+    // Sync transform on resize
     if (
       zoomTransform != d3.zoomIdentity &&
       (lastCanvasWidth != canvasWidth || lastCanvasHeight != canvasHeight)
@@ -126,15 +126,6 @@ export function heatmapChart(
 
     const labelAxis = labelAxisGroup(data.keyAxis, yScale)
 
-    const brush = d3
-      .brush()
-      .extent([
-        [0, 0],
-        [canvasWidth, canvasHeight],
-      ])
-      .on("start", brushStart)
-      .on("end", brushEnd)
-
     let xAxisSvg = axis.selectAll("g.x-axis").data([null])
 
     xAxisSvg = xAxisSvg
@@ -162,17 +153,6 @@ export function heatmapChart(
       .merge(labelAxisSvg)
       .attr("transform", "translate(20, " + margin.top + ")")
 
-    let brushSvg = axis.selectAll("g.brush").data([null])
-
-    brushSvg = brushSvg
-      .enter()
-      .append("g")
-      .classed("brush", true)
-      .merge(brushSvg)
-      .attr("transform", "translate(" + margin.left + "," + margin.top + ")")
-      .style("display", isBrushing ? "" : "none")
-      .call(brush)
-
     const zoomBehavior = d3
       .zoom()
       .scaleExtent([1, 64])
@@ -184,49 +164,20 @@ export function heatmapChart(
         [0, 0],
         [canvasWidth, canvasHeight],
       ])
-      .on("zoom", () => zoomed(d3.event.transform))
+      .on("zoom", zoomed)
       .on("start", zoomStart)
 
     function zoomStart() {
-      if (d3.event.sourceEvent? d3.event.sourceEvent.type == "mousedown" : false) {
+      if (
+        d3.event.sourceEvent ? d3.event.sourceEvent.type == "mousedown" : false
+      ) {
         hideTooltips()
       }
     }
 
-    function zoomed(transform) {
-      zoomTransform = transform
+    function zoomed() {
+      zoomTransform = d3.event.transform
       render()
-    }
-
-    function brushStart() {
-      hideTooltips()
-    }
-
-    function brushEnd() {
-      brushSvg.style("display", "none")
-      isBrushing = false
-      const selection = d3.event.selection
-
-      if (selection) {
-        brush.clear(brushSvg)
-        const domainTopLeft = zoomTransform.invert(selection[0])
-        const domainBottomRight = zoomTransform.invert(selection[1])
-        const startTime =
-          data.timeAxis[Math.round(xScale.invert(domainTopLeft[0]))]
-        const endTime =
-          data.timeAxis[Math.round(xScale.invert(domainBottomRight[0]))]
-        const startKey =
-          data.keyAxis[Math.round(yScale.invert(domainTopLeft[1]))].key
-        const endKey =
-          data.keyAxis[Math.round(yScale.invert(domainBottomRight[1]))].key
-
-        onBrush({
-          startTime: startTime,
-          endTime: endTime,
-          startKey: startKey,
-          endKey: endKey,
-        })
-      }
     }
 
     function hoverBehavior(axis) {
@@ -283,9 +234,9 @@ export function heatmapChart(
           },
         ]
 
-        const tooltipDiv = tooltips.selectAll("div").data([null])
+        let tooltipDiv = tooltips.selectAll("div").data([null])
 
-        tooltipDiv
+        tooltipDiv = tooltipDiv
           .enter()
           .append("div")
           .style("position", "absolute")
@@ -314,6 +265,58 @@ export function heatmapChart(
       tooltips.selectAll("div").remove()
     }
 
+    if (isBrushing) {
+      const brush = d3
+        .brush()
+        .extent([
+          [0, 0],
+          [canvasWidth, canvasHeight],
+        ])
+        .on("start", brushStart)
+        .on("end", brushEnd)
+
+      let brushSvg = axis.selectAll("g.brush").data([null])
+
+      brushSvg = brushSvg
+        .enter()
+        .append("g")
+        .classed("brush", true)
+        .merge(brushSvg)
+        .attr("transform", "translate(" + margin.left + "," + margin.top + ")")
+        .call(brush)
+
+      function brushStart() {
+        hideTooltips()
+      }
+
+      function brushEnd() {
+        brushSvg.remove()
+        isBrushing = false
+
+        const selection = d3.event.selection
+        if (selection) {
+          brush.clear(brushSvg)
+          const domainTopLeft = zoomTransform.invert(selection[0])
+          const domainBottomRight = zoomTransform.invert(selection[1])
+          const startTime =
+            data.timeAxis[Math.round(xScale.invert(domainTopLeft[0]))]
+          const endTime =
+            data.timeAxis[Math.round(xScale.invert(domainBottomRight[0]))]
+          const startKey =
+            data.keyAxis[Math.round(yScale.invert(domainTopLeft[1]))].key
+          const endKey =
+            data.keyAxis[Math.round(yScale.invert(domainBottomRight[1]))].key
+
+          onBrush({
+            startTime: startTime,
+            endTime: endTime,
+            startKey: startKey,
+            endKey: endKey,
+          })
+        }
+      }
+    }
+
     axis.call(zoomBehavior)
     axis.call(hoverBehavior)
 
@@ -323,7 +326,8 @@ export function heatmapChart(
 
       xAxisSvg.call(xAxis.scale(rescaleX))
       // yAxisSvg.call(yAxis.scale(rescaleY))
-      hideTicksWithoutLabel(axis)
+      hideTicksWithoutLabel()
+
       labelAxisSvg.call(labelAxis.scale(rescaleY))
 
       ctx.clearRect(0, 0, canvasWidth, canvasHeight)
@@ -341,16 +345,16 @@ export function heatmapChart(
       )
     }
 
+    function hideTicksWithoutLabel() {
+      axis.selectAll(".tick text").each(function() {
+        if (this.innerHTML === "") {
+          this.parentNode.style.display = "none"
+        }
+      })
+    }
+
     render()
   }
 
   return heatmapChart
-}
-
-function hideTicksWithoutLabel(axis) {
-  axis.selectAll(".tick text").each(function() {
-    if (this.innerHTML === "") {
-      this.parentNode.style.display = "none"
-    }
-  })
 }
