@@ -16,13 +16,10 @@ export const HeatmapPage: React.FunctionComponent = props => {
 
   return (
     <>
-      <button style={{margin: 20, display:'block'}}>Zoom</button>
       {heatmapData && (
         <Heatmap
-          width={1300}
-          height={800}
           data={heatmapData}
-          onRefresh={() => {}}
+          onBrush={range => console.log(range)}
         />
       )}
     </>

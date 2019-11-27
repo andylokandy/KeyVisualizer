@@ -22,28 +22,38 @@ export type HeatmapData = {
 }
 
 type HeatmapProps = {
-  width: number
-  height: number
   data: HeatmapData
-  onRefresh: (selection: HeatmapRange) => void
+  onBrush: (selection: HeatmapRange) => void
 }
 
 export const Heatmap: React.FunctionComponent<HeatmapProps> = props => {
   const divRef: React.RefObject<HTMLDivElement> = useRef(null)
+  var chart
+
+  useEffect(() => {
+    chart = heatmapChart(props.data, 1, props.onBrush)
+  }, [props.data])
 
   useEffect(() => {
     if (divRef.current != null) {
-      const div = divRef.current
-      div.innerHTML = ""
-      heatmapChart(
-        d3.select(div),
-        props.width,
-        props.height,
-        props.data,
-        props.onRefresh
-      )
+      window.onresize = () => chart(d3.select(divRef.current))
+      chart(d3.select(divRef.current))
     }
   }, [props])
 
-  return <div ref={divRef} />
+  const onZoomClick = useCallback(() => {
+    if (divRef.current != null) {
+      chart.startBrush()
+      chart(d3.select(divRef.current))
+    }
+  }, [props])
+
+  return (
+    <>
+      <button style={{ margin: 20, display: "block" }} onClick={onZoomClick}>
+        Zoom
+      </button>
+      <div ref={divRef} style={{ width: "100%", height: 700 }} />
+    </>
+  )
 }

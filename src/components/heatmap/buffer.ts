@@ -1,7 +1,7 @@
 import * as d3 from "d3"
 
-export function createBuffer(values: number[][]) {
-  const maxValue = d3.max(values.map(array => d3.max(array)))
+export function createBuffer(values: number[][], brightness: number) {
+  const maxValue = d3.max(values.map(array => d3.max(array))) / brightness
   const logScale = d3.scaleSymlog().domain([0, maxValue])
   const colorScale = d3.scaleSequential(d => d3.interpolateInferno(logScale(d)))
 
