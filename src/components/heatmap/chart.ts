@@ -21,6 +21,9 @@ const tooltipOffset = {
   vertical: 20,
 }
 
+const crossSize = 25
+const crossWidth = 3
+
 type TooltipStatus =
   | {
       type: "hover" | "pin"
@@ -110,7 +113,7 @@ export function heatmapChart(onBrush: (range: HeatmapRange) => void) {
       .style("margin-bottom", margin.bottom + "px")
       .style("margin-left", margin.left + "px")
 
-    const ctx = canvas.node().getContext("2d")
+    const ctx: CanvasRenderingContext2D = canvas.node().getContext("2d")
     ctx.imageSmoothingEnabled = false
 
     const xScale = d3
@@ -218,100 +221,14 @@ export function heatmapChart(onBrush: (range: HeatmapRange) => void) {
           y: rescaleY.invert(mouseCanvasOffset[1]),
         }
 
-        renderTooltip()
-      }
-    }
-
-    function renderTooltip() {
-      if (tooltipStatus.type == "hide") {
-        tooltips.selectAll("div").remove()
-      } else {
-        const rescaleX = zoomTransform.rescaleX(xScale)
-        const rescaleY = zoomTransform.rescaleY(yScale)
-        const canvasOffset = [
-          rescaleX(tooltipStatus.x),
-          rescaleY(tooltipStatus.y),
-        ]
-        const clampX = x => _.clamp(x, 0, canvasWidth - tooltipSize.width)
-        const clampY = y => _.clamp(y, 0, canvasHeight - tooltipSize.height)
-        const rightX =
-          margin.left + clampX(canvasOffset[0] + tooltipOffset.horizontal)
-        const leftX =
-          margin.left +
-          clampX(
-            canvasOffset[0] + -tooltipSize.width - tooltipOffset.horizontal
-          )
-        const bottomY =
-          margin.top + clampY(canvasOffset[1] + tooltipOffset.vertical)
-        const topY =
-          margin.top +
-          clampY(canvasOffset[1] - tooltipSize.height - tooltipOffset.vertical)
-        const tooltipX = canvasOffset[0] < canvasWidth / 2 ? rightX : leftX
-        const tooltipY = canvasOffset[1] < canvasHeight / 2 ? bottomY : topY
-
-        let tooltipDiv = tooltips.selectAll("div").data([null])
-        tooltipDiv = tooltipDiv
-          .enter()
-          .append("div")
-          .style("position", "absolute")
-          .style("background-color", "#333")
-          .style("color", "#eee")
-          .style("padding", "5px")
-          .style("width", tooltipSize.width + "px")
-          .style("height", tooltipSize.height + "px")
-          .merge(tooltipDiv)
-          .style("left", tooltipX + "px")
-          .style("top", tooltipY + "px")
-
-        const timeIdx = Math.floor(tooltipStatus.x)
-        const keyIdx = Math.floor(tooltipStatus.y)
-
-        const tooltipData = [
-          {
-            name: "Value",
-            value: data.values[timeIdx][keyIdx],
-          },
-          {
-            name: "Start Time",
-            value: d3.timeFormat("%B %d, %Y %H:%M:%S")(
-              new Date(data.timeAxis[timeIdx] * 1000)
-            ),
-          },
-          {
-            name: "End Time",
-            value: data.timeAxis[timeIdx + 1]
-              ? d3.timeFormat("%B %d, %Y %H:%M:%S")(
-                  new Date(data.timeAxis[timeIdx + 1] * 1000)
-                )
-              : "",
-          },
-          {
-            name: "Start Key",
-            value: data.keyAxis[keyIdx].key,
-          },
-          {
-            name: "End Key",
-            value: data.keyAxis[keyIdx + 1] ? data.keyAxis[keyIdx + 1].key : "",
-          },
-        ]
-
-        const tooltipEntries = tooltipDiv.selectAll("p").data(tooltipData)
-        tooltipEntries
-          .enter()
-          .append("p")
-          .style("font-size", "12px")
-          .merge(tooltipEntries)
-          .text(d => d.value)
-
-        tooltipEntries.exit().remove()
-        tooltipDiv.exit().remove()
+        render()
       }
     }
 
     function hideTooltips() {
       if (tooltipStatus.type == "hover") {
         tooltipStatus = { type: "hide" }
-        renderTooltip()
+        render()
       }
     }
 
@@ -322,7 +239,7 @@ export function heatmapChart(onBrush: (range: HeatmapRange) => void) {
 
       if (tooltipStatus.type == "pin") {
         tooltipStatus = { type: "hide" }
-        renderTooltip()
+        render()
         return
       }
 
@@ -344,7 +261,7 @@ export function heatmapChart(onBrush: (range: HeatmapRange) => void) {
         y: rescaleY.invert(mouseCanvasOffset[1]),
       }
 
-      renderTooltip()
+      render()
     }
 
     if (isBrushing) {
@@ -426,6 +343,116 @@ export function heatmapChart(onBrush: (range: HeatmapRange) => void) {
         canvasWidth * MSAARatio,
         canvasHeight * MSAARatio
       )
+
+      renderCross()
+    }
+
+    function renderTooltip() {
+      if (tooltipStatus.type == "hide") {
+        tooltips.selectAll("div").remove()
+      } else {
+        const rescaleX = zoomTransform.rescaleX(xScale)
+        const rescaleY = zoomTransform.rescaleY(yScale)
+        const canvasOffset = [
+          rescaleX(tooltipStatus.x),
+          rescaleY(tooltipStatus.y),
+        ]
+        const clampX = x => _.clamp(x, 0, canvasWidth - tooltipSize.width)
+        const clampY = y => _.clamp(y, 0, canvasHeight - tooltipSize.height)
+        const rightX =
+          margin.left + clampX(canvasOffset[0] + tooltipOffset.horizontal)
+        const leftX =
+          margin.left +
+          clampX(
+            canvasOffset[0] + -tooltipSize.width - tooltipOffset.horizontal
+          )
+        const bottomY =
+          margin.top + clampY(canvasOffset[1] + tooltipOffset.vertical)
+        const topY =
+          margin.top +
+          clampY(canvasOffset[1] - tooltipSize.height - tooltipOffset.vertical)
+        const tooltipX = canvasOffset[0] < canvasWidth / 2 ? rightX : leftX
+        const tooltipY = canvasOffset[1] < canvasHeight / 2 ? bottomY : topY
+
+        let tooltipDiv = tooltips.selectAll("div").data([null])
+        tooltipDiv = tooltipDiv
+          .enter()
+          .append("div")
+          .style("position", "absolute")
+          .style("background-color", "#333")
+          .style("color", "#eee")
+          .style("padding", "5px")
+          .style("width", tooltipSize.width + "px")
+          .style("height", tooltipSize.height + "px")
+          .merge(tooltipDiv)
+          .style("left", tooltipX + "px")
+          .style("top", tooltipY + "px")
+
+        const timeIdx = Math.floor(tooltipStatus.x)
+        const keyIdx = Math.floor(tooltipStatus.y)
+
+        // FIXME: refactor
+        const tooltipData = [
+          {
+            name: "Value",
+            value: data.values[timeIdx][keyIdx],
+          },
+          {
+            name: "Start Time",
+            value: d3.timeFormat("%B %d, %Y %H:%M:%S")(
+              new Date(data.timeAxis[timeIdx] * 1000)
+            ),
+          },
+          {
+            name: "End Time",
+            value: data.timeAxis[timeIdx + 1]
+              ? d3.timeFormat("%B %d, %Y %H:%M:%S")(
+                  new Date(data.timeAxis[timeIdx + 1] * 1000)
+                )
+              : "",
+          },
+          {
+            name: "Start Key",
+            value: data.keyAxis[keyIdx].key,
+          },
+          {
+            name: "End Key",
+            value: data.keyAxis[keyIdx + 1] ? data.keyAxis[keyIdx + 1].key : "",
+          },
+        ]
+
+        const tooltipEntries = tooltipDiv.selectAll("p").data(tooltipData)
+        tooltipEntries
+          .enter()
+          .append("p")
+          .style("font-size", "12px")
+          .merge(tooltipEntries)
+          .text(d => d.value)
+
+        tooltipEntries.exit().remove()
+        tooltipDiv.exit().remove()
+      }
+    }
+
+    function renderCross() {
+      if (tooltipStatus.type == "pin") {
+        const rescaleX = zoomTransform.rescaleX(xScale)
+        const rescaleY = zoomTransform.rescaleY(yScale)
+        const canvasOffset = [
+          rescaleX(tooltipStatus.x) * MSAARatio,
+          rescaleY(tooltipStatus.y) * MSAARatio,
+        ]
+
+        ctx.lineWidth = crossWidth * MSAARatio
+        ctx.strokeStyle = '#eee'
+        ctx.lineCap = 'round'
+        ctx.beginPath()
+        ctx.moveTo(canvasOffset[0], canvasOffset[1] - crossSize)
+        ctx.lineTo(canvasOffset[0], canvasOffset[1] + crossSize)
+        ctx.moveTo(canvasOffset[0] - crossSize, canvasOffset[1])
+        ctx.lineTo(canvasOffset[0] + crossSize, canvasOffset[1])
+        ctx.stroke()
+      }
     }
 
     function hideTicksWithoutLabel() {
