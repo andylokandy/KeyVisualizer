@@ -11,6 +11,16 @@ const margin = {
   left: 100,
 }
 
+const tooltipSize = {
+  width: 400,
+  height: 100,
+}
+
+const tooltipOffset = {
+  horizontal: 20,
+  vertical: 20,
+}
+
 export function heatmapChart(onBrush: (range: HeatmapRange) => void) {
   var data: HeatmapData
   var brightness = 1
@@ -35,7 +45,7 @@ export function heatmapChart(onBrush: (range: HeatmapRange) => void) {
 
   heatmapChart.size = function(newWidth, newHeight) {
     const newCanvasWidth = newWidth - margin.left - margin.right
-    const newCanvasHeight = newHeight - margin.left - margin.right
+    const newCanvasHeight = newHeight - margin.top - margin.bottom
     // Sync transform on resize
     if (canvasWidth != 0 && canvasHeight != 0) {
       zoomTransform = d3.zoomIdentity
@@ -45,7 +55,7 @@ export function heatmapChart(onBrush: (range: HeatmapRange) => void) {
         )
         .scale(zoomTransform.k)
     }
-    
+
     width = newWidth
     height = newHeight
     canvasWidth = newCanvasWidth
@@ -63,6 +73,7 @@ export function heatmapChart(onBrush: (range: HeatmapRange) => void) {
       .enter()
       .append("div")
       .style("position", "absolute")
+      // .style("z-index", "1")
       .merge(tooltips)
       .style("width", width + "px")
       .style("height", height + "px")
@@ -237,6 +248,15 @@ export function heatmapChart(onBrush: (range: HeatmapRange) => void) {
 
         let tooltipDiv = tooltips.selectAll("div").data([null])
 
+        const rightX = mouseTooltipOffset[0] + tooltipOffset.horizontal
+        const bottomY = mouseTooltipOffset[1] + tooltipOffset.vertical
+        const leftX =
+          mouseTooltipOffset[0] - tooltipSize.width - tooltipOffset.horizontal
+        const topY =
+          mouseTooltipOffset[1] - tooltipSize.height - tooltipOffset.vertical
+        var tooltipX = mouseCanvasOffset[0] < canvasWidth / 2 ? rightX : leftX
+        var tooltipY = mouseCanvasOffset[1] < canvasHeight / 2 ? bottomY : topY
+
         tooltipDiv = tooltipDiv
           .enter()
           .append("div")
@@ -244,9 +264,11 @@ export function heatmapChart(onBrush: (range: HeatmapRange) => void) {
           .style("background-color", "#333")
           .style("color", "#eee")
           .style("padding", "5px")
+          .style("width", tooltipSize.width + "px")
+          .style("height", tooltipSize.height + "px")
           .merge(tooltipDiv)
-          .style("left", mouseTooltipOffset[0] + 20 + "px")
-          .style("top", mouseTooltipOffset[1] + 20 + "px")
+          .style("left", tooltipX + "px")
+          .style("top", tooltipY + "px")
 
         const tooltipEntries = tooltipDiv.selectAll("p").data(tooltipData)
 
