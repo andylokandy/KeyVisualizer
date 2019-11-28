@@ -21,11 +21,20 @@ const tooltipOffset = {
   vertical: 20,
 }
 
+type TooltipStatus =
+  | {
+      type: "hover" | "pin"
+      x: number
+      y: number
+    }
+  | { type: "hide" }
+
 export function heatmapChart(onBrush: (range: HeatmapRange) => void) {
   var data: HeatmapData
   var brightness = 1
   var bufferCanvas: HTMLCanvasElement
   var zoomTransform = d3.zoomIdentity
+  var tooltipStatus: TooltipStatus = { type: "hide" }
   var isBrushing = false
   var width = 0
   var height = 0
@@ -36,6 +45,7 @@ export function heatmapChart(onBrush: (range: HeatmapRange) => void) {
   heatmapChart.data = function(newData: HeatmapData) {
     data = newData
     bufferCanvas = createBuffer(data.values, brightness)
+    tooltipStatus = { type: "hide" }
   }
 
   heatmapChart.brightness = function(newBrightness: number) {
@@ -68,18 +78,15 @@ export function heatmapChart(onBrush: (range: HeatmapRange) => void) {
 
   function heatmapChart(container) {
     let tooltips = container.selectAll("div").data([null])
-
     tooltips = tooltips
       .enter()
       .append("div")
       .style("position", "absolute")
-      // .style("z-index", "1")
       .merge(tooltips)
       .style("width", width + "px")
       .style("height", height + "px")
 
     let axis = container.selectAll("svg").data([null])
-
     axis = axis
       .enter()
       .append("svg")
@@ -137,7 +144,6 @@ export function heatmapChart(onBrush: (range: HeatmapRange) => void) {
     const labelAxis = labelAxisGroup(data.keyAxis, yScale)
 
     let xAxisSvg = axis.selectAll("g.x-axis").data([null])
-
     xAxisSvg = xAxisSvg
       .enter()
       .append("g")
@@ -146,7 +152,6 @@ export function heatmapChart(onBrush: (range: HeatmapRange) => void) {
       .attr("transform", "translate(" + margin.left + "," + (height - 20) + ")")
 
     let yAxisSvg = axis.selectAll("g.y-axis").data([null])
-
     yAxisSvg = yAxisSvg
       .enter()
       .append("g")
@@ -155,7 +160,6 @@ export function heatmapChart(onBrush: (range: HeatmapRange) => void) {
       .attr("transform", "translate(0, " + margin.top + ")")
 
     let labelAxisSvg = axis.selectAll("g.label-axis").data([null])
-
     labelAxisSvg = labelAxisSvg
       .enter()
       .append("g")
@@ -177,18 +181,12 @@ export function heatmapChart(onBrush: (range: HeatmapRange) => void) {
         [canvasWidth, canvasHeight],
       ])
       .on("zoom", zoomed)
-      .on("start", zoomStart)
-
-    function zoomStart() {
-      if (
-        d3.event.sourceEvent ? d3.event.sourceEvent.type == "mousedown" : false
-      ) {
-        hideTooltips()
-      }
-    }
 
     function zoomed() {
       zoomTransform = d3.event.transform
+
+      if (tooltipStatus.type == "hover") tooltipStatus = { type: "hide" }
+
       render()
     }
 
@@ -196,7 +194,8 @@ export function heatmapChart(onBrush: (range: HeatmapRange) => void) {
       axis.on("mousemove", mousemove)
       axis.on("mouseout", hideTooltips)
       function mousemove() {
-        const mouseTooltipOffset = d3.mouse(tooltips.node())
+        if (tooltipStatus.type == "pin") return
+
         const mouseCanvasOffset = d3.mouse(canvas.node())
 
         if (d3.event.movementX == 0 && d3.event.movementY == 0) return
@@ -213,10 +212,60 @@ export function heatmapChart(onBrush: (range: HeatmapRange) => void) {
 
         const rescaleX = zoomTransform.rescaleX(xScale)
         const rescaleY = zoomTransform.rescaleY(yScale)
-        const timeIdx = Math.floor(rescaleX.invert(mouseCanvasOffset[0]))
-        const keyIdx = Math.floor(rescaleY.invert(mouseCanvasOffset[1]))
+        tooltipStatus = {
+          type: "hover",
+          x: rescaleX.invert(mouseCanvasOffset[0]),
+          y: rescaleY.invert(mouseCanvasOffset[1]),
+        }
 
-        // Refactor Me
+        renderTooltip()
+      }
+    }
+
+    function renderTooltip() {
+      if (tooltipStatus.type == "hide") {
+        tooltips.selectAll("div").remove()
+      } else {
+        const rescaleX = zoomTransform.rescaleX(xScale)
+        const rescaleY = zoomTransform.rescaleY(yScale)
+        const canvasOffset = [
+          rescaleX(tooltipStatus.x),
+          rescaleY(tooltipStatus.y),
+        ]
+        const clampX = x => _.clamp(x, 0, canvasWidth - tooltipSize.width)
+        const clampY = y => _.clamp(y, 0, canvasHeight - tooltipSize.height)
+        const rightX =
+          margin.left + clampX(canvasOffset[0] + tooltipOffset.horizontal)
+        const leftX =
+          margin.left +
+          clampX(
+            canvasOffset[0] + -tooltipSize.width - tooltipOffset.horizontal
+          )
+        const bottomY =
+          margin.top + clampY(canvasOffset[1] + tooltipOffset.vertical)
+        const topY =
+          margin.top +
+          clampY(canvasOffset[1] - tooltipSize.height - tooltipOffset.vertical)
+        const tooltipX = canvasOffset[0] < canvasWidth / 2 ? rightX : leftX
+        const tooltipY = canvasOffset[1] < canvasHeight / 2 ? bottomY : topY
+
+        let tooltipDiv = tooltips.selectAll("div").data([null])
+        tooltipDiv = tooltipDiv
+          .enter()
+          .append("div")
+          .style("position", "absolute")
+          .style("background-color", "#333")
+          .style("color", "#eee")
+          .style("padding", "5px")
+          .style("width", tooltipSize.width + "px")
+          .style("height", tooltipSize.height + "px")
+          .merge(tooltipDiv)
+          .style("left", tooltipX + "px")
+          .style("top", tooltipY + "px")
+
+        const timeIdx = Math.floor(tooltipStatus.x)
+        const keyIdx = Math.floor(tooltipStatus.y)
+
         const tooltipData = [
           {
             name: "Value",
@@ -246,32 +295,7 @@ export function heatmapChart(onBrush: (range: HeatmapRange) => void) {
           },
         ]
 
-        let tooltipDiv = tooltips.selectAll("div").data([null])
-
-        const rightX = mouseTooltipOffset[0] + tooltipOffset.horizontal
-        const bottomY = mouseTooltipOffset[1] + tooltipOffset.vertical
-        const leftX =
-          mouseTooltipOffset[0] - tooltipSize.width - tooltipOffset.horizontal
-        const topY =
-          mouseTooltipOffset[1] - tooltipSize.height - tooltipOffset.vertical
-        var tooltipX = mouseCanvasOffset[0] < canvasWidth / 2 ? rightX : leftX
-        var tooltipY = mouseCanvasOffset[1] < canvasHeight / 2 ? bottomY : topY
-
-        tooltipDiv = tooltipDiv
-          .enter()
-          .append("div")
-          .style("position", "absolute")
-          .style("background-color", "#333")
-          .style("color", "#eee")
-          .style("padding", "5px")
-          .style("width", tooltipSize.width + "px")
-          .style("height", tooltipSize.height + "px")
-          .merge(tooltipDiv)
-          .style("left", tooltipX + "px")
-          .style("top", tooltipY + "px")
-
         const tooltipEntries = tooltipDiv.selectAll("p").data(tooltipData)
-
         tooltipEntries
           .enter()
           .append("p")
@@ -285,7 +309,42 @@ export function heatmapChart(onBrush: (range: HeatmapRange) => void) {
     }
 
     function hideTooltips() {
-      tooltips.selectAll("div").remove()
+      if (tooltipStatus.type == "hover") {
+        tooltipStatus = { type: "hide" }
+        renderTooltip()
+      }
+    }
+
+    axis.on("click", clicked)
+
+    function clicked() {
+      if (d3.event.defaultPrevented) return // zoomed
+
+      if (tooltipStatus.type == "pin") {
+        tooltipStatus = { type: "hide" }
+        renderTooltip()
+        return
+      }
+
+      const mouseCanvasOffset = d3.mouse(canvas.node())
+      if (
+        mouseCanvasOffset[0] < 0 ||
+        mouseCanvasOffset[0] > canvasWidth ||
+        mouseCanvasOffset[1] < 0 ||
+        mouseCanvasOffset[1] > canvasHeight
+      ) {
+        return
+      }
+
+      const rescaleX = zoomTransform.rescaleX(xScale)
+      const rescaleY = zoomTransform.rescaleY(yScale)
+      tooltipStatus = {
+        type: "pin",
+        x: rescaleX.invert(mouseCanvasOffset[0]),
+        y: rescaleY.invert(mouseCanvasOffset[1]),
+      }
+
+      renderTooltip()
     }
 
     if (isBrushing) {
@@ -299,7 +358,6 @@ export function heatmapChart(onBrush: (range: HeatmapRange) => void) {
         .on("end", brushEnd)
 
       let brushSvg = axis.selectAll("g.brush").data([null])
-
       brushSvg = brushSvg
         .enter()
         .append("g")
@@ -352,6 +410,8 @@ export function heatmapChart(onBrush: (range: HeatmapRange) => void) {
       hideTicksWithoutLabel()
 
       labelAxisSvg.call(labelAxis.scale(rescaleY))
+
+      renderTooltip()
 
       ctx.clearRect(0, 0, canvasWidth, canvasHeight)
 
