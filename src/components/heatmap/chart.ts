@@ -175,21 +175,50 @@ export function heatmapChart(onBrush: (range: HeatmapRange) => void) {
     const zoomBehavior = d3
       .zoom()
       .scaleExtent([1, 64])
-      .translateExtent([
-        [0, 0],
-        [canvasWidth, canvasHeight],
-      ])
-      .extent([
-        [0, 0],
-        [canvasWidth, canvasHeight],
-      ])
       .on("zoom", zoomed)
+      .on("end", zoomEnd)
+
+    function constrainBoucing(transform) {
+      const bounceRatio = 0.5
+      const dragLeft = Math.max(0, transform.applyX(0))
+      const dragRight = Math.max(0, canvasWidth - transform.applyX(canvasWidth))
+      const dragTop = Math.max(0, transform.applyY(0))
+      const dragBottom = Math.max(
+        0,
+        canvasHeight - transform.applyY(canvasHeight)
+      )
+      return d3.zoomIdentity
+        .translate(
+          transform.x - (dragLeft - dragRight) * bounceRatio,
+          transform.y - (dragTop - dragBottom) * bounceRatio
+        )
+        .scale(transform.k)
+    }
+
+    function constrainHard(transform) {
+      var dx0 = transform.invertX(0),
+        dx1 = transform.invertX(canvasWidth) - canvasWidth,
+        dy0 = transform.invertY(0),
+        dy1 = transform.invertY(canvasHeight) - canvasHeight
+      return transform.translate(
+        dx1 > dx0 ? (dx0 + dx1) / 2 : Math.min(0, dx0) || Math.max(0, dx1),
+        dy1 > dy0 ? (dy0 + dy1) / 2 : Math.min(0, dy0) || Math.max(0, dy1)
+      )
+    }
 
     function zoomed() {
-      zoomTransform = d3.event.transform
-
       if (tooltipStatus.type == "hover") tooltipStatus = { type: "hide" }
+      if (d3.event.sourceEvent.type == "mousemove") {
+        zoomTransform = constrainBoucing(d3.event.transform)
+      } else {
+        zoomTransform = constrainHard(d3.event.transform)
+      }
+      render()
+    }
 
+    function zoomEnd() {
+      zoomTransform = constrainHard(zoomTransform)
+      axis.call(d3.zoom().transform, zoomTransform)
       render()
     }
 
@@ -330,7 +359,7 @@ export function heatmapChart(onBrush: (range: HeatmapRange) => void) {
 
       renderTooltip()
 
-      ctx.clearRect(0, 0, canvasWidth, canvasHeight)
+      ctx.clearRect(0, 0, canvasWidth * MSAARatio, canvasHeight * MSAARatio)
 
       ctx.drawImage(
         bufferCanvas,
@@ -444,8 +473,8 @@ export function heatmapChart(onBrush: (range: HeatmapRange) => void) {
         ]
 
         ctx.lineWidth = crossWidth * MSAARatio
-        ctx.strokeStyle = '#eee'
-        ctx.lineCap = 'round'
+        ctx.strokeStyle = "#eee"
+        ctx.lineCap = "round"
         ctx.beginPath()
         ctx.moveTo(canvasOffset[0], canvasOffset[1] - crossSize)
         ctx.lineTo(canvasOffset[0], canvasOffset[1] + crossSize)
