@@ -189,8 +189,8 @@ export function heatmapChart(onBrush: (range: HeatmapRange) => void) {
       )
       return d3.zoomIdentity
         .translate(
-          transform.x - (dragLeft - dragRight) * bounceRatio,
-          transform.y - (dragTop - dragBottom) * bounceRatio
+          Math.floor(transform.x - (dragLeft - dragRight) * bounceRatio),
+          Math.floor(transform.y - (dragTop - dragBottom) * bounceRatio)
         )
         .scale(transform.k)
     }
